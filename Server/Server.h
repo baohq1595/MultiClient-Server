@@ -9,11 +9,13 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <netdb.h>
+#include <boost/thread.hpp>
+#include <boost/chrono.hpp>
 
-class Streamer
+class Server
 {
 public:
-    Streamer(string listenPort);
+    Server(std::string listenPort);
 
     void startStreaming();
     void Initialize();
@@ -21,7 +23,7 @@ public:
 
 private:
     fd_set readFDs;
-    string mListenPort;
+    std::string mListenPort;
     int mListenSock;
     int maxFD;
     boost::mutex mtxFDSet;
@@ -30,7 +32,7 @@ private:
 
     int newConnectionHdl();
     void *getInAddr(struct sockaddr *sockAddr);
-	std::string Streamer::getIPAddrStr(struct sockaddr_storage remoteAddr);
+	std::string getIPAddrStr(struct sockaddr_storage remoteAddr);
     void sendStreamingData();
 };
 

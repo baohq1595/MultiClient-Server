@@ -1,18 +1,20 @@
-#include "Streamer.h"
+#include "Server.h"
 
 using namespace std;
 
 
-Streamer::Streamer(string listenPort)
+Server::Server(string listenPort)
 {
 	mListenPort = listenPort;
 	FD_ZERO(&readFDs);
+	maxFD = -1;
+	mListenSock = -1;
 }
 
 /*
  * Return socket info base on address family
  */
-void *Streamer::getInAddr(struct sockaddr *sockAddr)
+void *Server::getInAddr(struct sockaddr *sockAddr)
 {
 	if (sockAddr->sa_family == AF_INET)
 	{
@@ -24,17 +26,19 @@ void *Streamer::getInAddr(struct sockaddr *sockAddr)
 /*
  * Return socket info: readable ip address
  */
-string Streamer::getIPAddrStr(struct sockaddr_storage remoteAddr)
+string Server::getIPAddrStr(struct sockaddr_storage remoteAddr)
 {
 	char remoteIP[INET6_ADDRSTRLEN];
+	inet_ntop(remoteAddr.ss_family, getInAddr((struct sockaddr *)&remoteAddr), remoteIP, INET6_ADDRSTRLEN);
+	string str(remoteIP);
 	
-	return string (inet_ntop(remoteAddr.ss_family, getInAddr((struct sockaddr *)&remoteAddr), remoteIP, INET6_ADDRSTRLEN));
+	return str;
 }
 
 /*
  * Create server socket to listen to new connection
  */
-void Streamer::Initialize()
+void Server::Initialize()
 {
 	struct addrinfo hints, *ai, *p;
 	int rValue;
@@ -89,7 +93,7 @@ void Streamer::Initialize()
 /*
  * Return socket value when a new client connects to server
  */
-int Streamer::newConnectionHdl()
+int Server::newConnectionHdl()
 {
 	int newFD;
 	struct sockaddr_storage remoteAddr;
@@ -119,7 +123,7 @@ int Streamer::newConnectionHdl()
  * Traverse through connected socket set to check incoming data and send back data
  * Run in a separate thread
  */
-void Streamer::sendStreamingData()
+void Server::sendStreamingData()
 {
 	//prepare frame to send
 	string gSignal = "Greeting from Server.\n";
@@ -127,7 +131,8 @@ void Streamer::sendStreamingData()
 	fd_set tmpFDs;
 	struct timeval tv;
 	int tmpMaxFD, frameSize, bytesSent, totalFrames, bytesRead;
-	unsigned char buffer[1024];
+	char buffer[1024];
+	unsigned int buffLeng = sizeof buffer;
 	socklen_t sockLeng;
 	struct sockaddr_storage remoteAddr;
 
@@ -159,7 +164,10 @@ void Streamer::sendStreamingData()
 
 				else
 				{
-					if ((bytesRead = recv(i, buffer, sizeof buffer, 0)) <= 0)
+					memset(buffer, 0, buffLeng);
+					bytesRead = recv(i, buffer, buffLeng, 0);
+
+					if (bytesRead <= 0)
 					{
 						cout << "client closed connection on socket " << i << endl;
 						close(i);
@@ -170,9 +178,10 @@ void Streamer::sendStreamingData()
 					}
 					else
 					{
-						string recvMesg(buffer);
-						cout << "Message from " << getIPAddrStr(getpeername(i, (struct sockaddr *)&remoteAddr, sockLeng)) << ": " << recvMesg << endl;
-						if (bytesSent = send(i, gSignal.c_str(), strLeng, 0) > 0)
+						string recvMesg(buffer, bytesRead);
+						getpeername(i, (struct sockaddr *)&remoteAddr, &sockLeng);
+						cout << "Message from " << getIPAddrStr(remoteAddr) << ": " << recvMesg << "\n";
+						if ((bytesSent = send(i, gSignal.c_str(), strLeng, 0)) > 0)
 						{
 							cout << "Sent greeting to client.\n";
 						}
@@ -187,7 +196,7 @@ void Streamer::sendStreamingData()
  * Check if there is new connection
  * Run in a separate thread
  */
-void Streamer::connectionHdl()
+void Server::connectionHdl()
 {
 	fd_set tmpFDs;
 	unsigned char buffer[1024];
@@ -207,7 +216,7 @@ void Streamer::connectionHdl()
 
 		else
 		{
-			if (FD_ISSET(mListenSock, &tmpFDs)
+			if (FD_ISSET(mListenSock, &tmpFDs))
 			{
 				newConnectionHdl();
 			}
@@ -216,8 +225,8 @@ void Streamer::connectionHdl()
 }
 
 
-void Streamer::startStreaming()
+void Server::startStreaming()
 {
-	boost::thread tConnHdl(&Streamer::connectionHdl, this);
-	boost::thread tStreamer(&Streamer::sendStreamingData, this);
+	boost::thread tConnHdl(&Server::connectionHdl, this);
+	boost::thread tServer(&Server::sendStreamingData, this);
 }

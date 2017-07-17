@@ -1,7 +1,7 @@
 cmake_minimum_required (VERSION 2.6)
 
 # Define project name
-project (Server)
+project (Client)
 
 #Search for Boost Libraries - STATIC only
 set(Boost_USE_STATIC_LIBS ON)
@@ -18,9 +18,8 @@ include_directories(${CMAKE_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR} ${Boost_INCL
 link_directories(${Boost_LIBRARY_DIRS})
 
 
-set ( Server_SRCS
-    Server.cpp
-    mainServer.cpp
+set ( Client_SRCS
+    mainClient.cpp
 )
-add_executable(Server ${Server_SRCS})
-target_link_libraries(Server ${LIBRARIES})
+add_executable(Client ${Client_SRCS})
+target_link_libraries(Client ${LIBRARIES})

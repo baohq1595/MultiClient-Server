@@ -67,15 +67,18 @@ int main(int argc, char** argv)
 	///////////////////////////////////////////////////////
 	while(1)
 	{
+		memset(sendBuffer, 0, buffLeng);
+		memset(recvBuffer, 0, buffLeng);
 		cout << "Enter message to send: ";
 		cin >> sendBuffer;
-		send(sockfd, sendBuffer(), buffLeng, 0);
+		cout << "Input..." << sendBuffer << endl;
+		send(sockfd, sendBuffer, buffLeng, 0);
 		
 		bytesRead = 0;
-		if ((bytesRead = recv(sockfd, buffer, buffLeng, 0)) == -1)
+		if ((bytesRead = recv(sockfd, recvBuffer, buffLeng, 0)) == -1)
 		{
 			cout << "Server closed.\n";
-			return;
+			return -1;
 		}
 		
 		cout << "Message received from Server: " << string(recvBuffer, bytesRead) << endl;
