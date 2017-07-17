@@ -1,25 +1,17 @@
-/*
- * Streamer.cpp
- *
- * Created on: Mar 3, 2017
- * Author: TrucNDT
-*/
-
 #include "Streamer.h"
 
 using namespace std;
 
 
-Streamer::Streamer(string listenPort, CameraController *cameraController)
+Streamer::Streamer(string listenPort)
 {
 	mListenPort = listenPort;
-	mCamController = cameraController;
-//	mCamController->enableCamera();
-//	mCamController->startCamera();
 	FD_ZERO(&readFDs);
-//	FD_ZERO(&writeFDs);
 }
 
+/*
+ * Return socket info base on address family
+ */
 void *Streamer::getInAddr(struct sockaddr *sockAddr)
 {
 	if (sockAddr->sa_family == AF_INET)
@@ -29,6 +21,19 @@ void *Streamer::getInAddr(struct sockaddr *sockAddr)
 	return &(((struct sockaddr_in6 *)sockAddr)->sin6_addr);
 }
 
+/*
+ * Return socket info: readable ip address
+ */
+string Streamer::getIPAddrStr(struct sockaddr_storage remoteAddr)
+{
+	char remoteIP[INET6_ADDRSTRLEN];
+	
+	return string (inet_ntop(remoteAddr.ss_family, getInAddr((struct sockaddr *)&remoteAddr), remoteIP, INET6_ADDRSTRLEN));
+}
+
+/*
+ * Create server socket to listen to new connection
+ */
 void Streamer::Initialize()
 {
 	struct addrinfo hints, *ai, *p;
@@ -42,7 +47,7 @@ void Streamer::Initialize()
 
 	if ((rValue = getaddrinfo(NULL, mListenPort.c_str(), &hints, &ai)) != 0)
 	{
-		cout << "getaddrinfo failed: " << gai_strerror(rValue) << " in " << __FILE__ << __LINE__ << endl;
+		cout << "getaddrinfo failed: " << gai_strerror(rValue) << "in " << __FILE__ << __LINE__ << endl;
 		return;
 	}
 
@@ -81,10 +86,12 @@ void Streamer::Initialize()
 	FD_SET(mListenSock, &readFDs);
 }
 
+/*
+ * Return socket value when a new client connects to server
+ */
 int Streamer::newConnectionHdl()
 {
 	int newFD;
-	char remoteIP[INET6_ADDRSTRLEN];
 	struct sockaddr_storage remoteAddr;
 	unsigned int addrLen = sizeof remoteAddr;
 
@@ -96,32 +103,37 @@ int Streamer::newConnectionHdl()
 
 	mtxFDSet.lock();
 	FD_SET(newFD, &readFDs);
-	//FD_SET(newFD, &writeFDs);
 
 	if (maxFD < newFD)
 	{
 		maxFD = newFD;
 	}
+	
 	mtxFDSet.unlock();
-	cout << "new connection from " << inet_ntop(remoteAddr.ss_family, getInAddr((struct sockaddr *)&remoteAddr), remoteIP, newFD) << endl;
+	cout << "new connection from " << getIPAddrStr(remoteAddr) << endl;
 
 	return newFD;
-
 }
 
+/*
+ * Traverse through connected socket set to check incoming data and send back data
+ * Run in a separate thread
+ */
 void Streamer::sendStreamingData()
 {
 	//prepare frame to send
+	string gSignal = "Greeting from Server.\n";
+	unsigned int strLeng = gSignal.length();
 	fd_set tmpFDs;
-	Mat frame;
-	uchar *fPtr;
 	struct timeval tv;
-	int tmpMaxFD, frameSize, bytesSent, totalFrames;
+	int tmpMaxFD, frameSize, bytesSent, totalFrames, bytesRead;
+	unsigned char buffer[1024];
+	socklen_t sockLeng;
+	struct sockaddr_storage remoteAddr;
 
 	tv.tv_sec = 0;
 	tv.tv_usec = 50000;
-	frameSize = frame.total() * frame.elemSize();
-	fPtr = frame.data;
+	
 	while(1)
 	{
 		mtxFDSet.lock();
@@ -134,47 +146,7 @@ void Streamer::sendStreamingData()
 			cout << "select fd set failed: " << __FILE__ << __LINE__ << endl;
 			return;
 		}
-
-		mCamController->getNewFrame().copyTo(frame);
-		frameSize = frame.total() * frame.elemSize();
-		totalFrames++;
-		cout << "Frame nth: " << totalFrames << endl;
-		for (int i = 0; i <= tmpMaxFD; i++)
-		{
-			if (FD_ISSET(i, &tmpFDs))
-			{
-				if (i == mListenSock)
-				{
-					continue;
-				}
-
-				if ((bytesSent = send(i, frame.data, frameSize, 0)) <= 0)
-				{
-					continue;
-				}
-			}
-		}
-	}
-}
-
-void Streamer::connectionHdl()
-{
-	fd_set tmpFDs;
-	unsigned char buffer[1024];
-	int bytesRead;
-	int newFD;
-	maxFD = mListenSock;
-
-	while(true)
-	{
-		tmpFDs = readFDs;
-
-		if (select(maxFD + 1, &tmpFDs, NULL, NULL, NULL) == -1)
-		{
-			cout << "select fd set failed: " << __FILE__ << __LINE__ << endl;
-			return;
-		}
-
+		
 		//loop through socket to check ready socket
 		for (int i = 0; i <= maxFD; i++)
 		{
@@ -182,7 +154,7 @@ void Streamer::connectionHdl()
 			{
 				if (i == mListenSock)
 				{
-					newConnectionHdl();
+					;
 				}
 
 				else
@@ -194,14 +166,55 @@ void Streamer::connectionHdl()
 
 						mtxFDSet.lock();
 						FD_CLR(i, &readFDs);
-						//FD_CLR(i, &writeFDs);
 						mtxFDSet.unlock();
+					}
+					else
+					{
+						string recvMesg(buffer);
+						cout << "Message from " << getIPAddrStr(getpeername(i, (struct sockaddr *)&remoteAddr, sockLeng)) << ": " << recvMesg << endl;
+						if (bytesSent = send(i, gSignal.c_str(), strLeng, 0) > 0)
+						{
+							cout << "Sent greeting to client.\n";
+						}
 					}
 				}
 			}
 		}
 	}
 }
+
+/*
+ * Check if there is new connection
+ * Run in a separate thread
+ */
+void Streamer::connectionHdl()
+{
+	fd_set tmpFDs;
+	unsigned char buffer[1024];
+	int bytesRead, newFD, rValue;
+	maxFD = mListenSock;
+
+	while(true)
+	{
+		tmpFDs = readFDs;
+		rValue = select(maxFD + 1, &tmpFDs, NULL, NULL, NULL);
+		
+		if (rValue == -1)
+		{
+			cout << "select fd set failed: " << __FILE__ << __LINE__ << endl;
+			return;
+		}
+
+		else
+		{
+			if (FD_ISSET(mListenSock, &tmpFDs)
+			{
+				newConnectionHdl();
+			}
+		}
+	}
+}
+
 
 void Streamer::startStreaming()
 {
