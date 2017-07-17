@@ -1,10 +1,3 @@
-/*
- * Test_streamer.cpp
- *
- *  Created on: Mar 18, 2017
- *      Author: baohq
- */
-
 #include "opencv2/opencv.hpp"
 #include <stdio.h>
 #include <stdlib.h>
@@ -23,11 +16,11 @@ using namespace std;
 
 int main(int argc, char** argv)
 {
-	int sockfd, bytesRead, bytesReadTotal, imgSize;
+	int sockfd, bytesRead, imgSize;
 	struct addrinfo hints, *servInfo, *p;
-	Mat frame;
-	frame = Mat::zeros(480, 640, CV_8UC3);
-	imgSize = frame.total() * frame.elemSize();
+	char recvBuffer[1024];
+	char sendBuffer[1024];
+	unsigned int buffLeng = sizeof recvBuffer;
 
 	/*
 	 * Connect to server
@@ -72,33 +65,20 @@ int main(int argc, char** argv)
 	freeaddrinfo(servInfo);		//Done network stuffs
 
 	///////////////////////////////////////////////////////
-	namedWindow("stream", 1);
 	while(1)
 	{
-		bytesReadTotal = 0;
+		cout << "Enter message to send: ";
+		cin >> sendBuffer;
+		send(sockfd, sendBuffer(), buffLeng, 0);
+		
 		bytesRead = 0;
-		do
+		if ((bytesRead = recv(sockfd, buffer, buffLeng, 0)) == -1)
 		{
-			if ((bytesRead = recv(sockfd, frame.data + bytesReadTotal, imgSize - bytesReadTotal, 0)) == -1)
-			{
-				cout << "Server closed.\n";
-			}
-
-			bytesReadTotal += bytesRead;
+			cout << "Server closed.\n";
+			return;
 		}
-		while(bytesReadTotal < imgSize);
-
-		if (!frame.isContinuous())
-		{
-			frame = frame.clone();
-		}
-
-		imshow("stream", frame);
-
-		if (waitKey(10) == 'q')
-		{
-			break;
-		}
+		
+		cout << "Message received from Server: " << string(recvBuffer, bytesRead) << endl;
 	}
 	return 0;
 }
