@@ -10,7 +10,7 @@ set(SUPPRESSED_WARNING "-Wno-conversion-null -Wno-write-strings")
 
 # Compiling flags
 set(CMAKE_CXX_FLAGS "-g")
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${SUPPRESSED_WARNING}")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${SUPPRESSED_WARNING} -std=c++11")
 
 add_subdirectory(Server)
 add_subdirectory(Client)
