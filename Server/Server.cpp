@@ -78,13 +78,13 @@ void Server::createTCPSocket()
 		break;
 	}
 
+	freeaddrinfo(ai);
+
 	if (p == NULL)
 	{
 		cout << "bind socket failed: " << __FILE__ << __LINE__ << endl;
 		return;
 	}
-
-	freeaddrinfo(ai);
 
 	if (listen(tcpListenSock, MAX_BACKLOG) == -1)
 	{
@@ -132,13 +132,13 @@ void Server::createUDPSocket()
         break;
     }
 
+	freeaddrinfo(servinfo);
+
     if (p == NULL)
     {
         cout << "createUDPSocket: failed to bind socket\n";
         return;
     }
-
-    freeaddrinfo(servinfo);
 }
 
 /*

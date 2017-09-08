@@ -3,17 +3,21 @@
 
 #include <string.h>
 #include <sys/socket.h>
+#include <sys/time.h>
 #include <unistd.h>
+#include <stdio.h>
+#include <getopt.h>
 #include <sys/types.h>
 #include <stdlib.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <netdb.h>
-#include <boost/thread.hpp>
-#include <boost/chrono.hpp>
 #include <functional>
 #include <pthread.h>
 #include <thread>
+#include <mutex>
+#include <map>
+#include <iostream>
 
 class Server
 {
@@ -30,11 +34,11 @@ private:
     int tcpListenSock;
 	int udpListenSock;
     int maxFD;
-    boost::mutex mtxFDSet;
+    std::mutex mtxFDSet;
 	std::map<std::string, int> clientList;	//string is for PC's ID (e.g IP address), int is for alive time
 
     static const int MAX_BACKLOG = 3;	//maximum accepted connections
-	static const int HB_MESG_LENG = 4;	//heartbeat packet length 'H','E','Y','\0'
+	static const int HB_MESG_LENG = 3;	//heartbeat packet length 'H','E','Y'
 	static const int ALIVE_TIMEOUT = 5;
 
 	void createTCPSocket();
